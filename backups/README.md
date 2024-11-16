@@ -1,25 +1,22 @@
-> Сборка и запуск
-- Необходим Rust & Cargo
-- `cargo run`
+# Сборка и запуск
+1. Необходим Rust & Cargo
+2. `cargo run`
 
-> С Docker
-- `docker build -t backups:latest .`
-- `docker run -v <absolute path to src>:/src -v <absolute path to dst>:/dst -v <absolute path to config.yml>:/bin/config.yml -it backups:latest <command, optional>`
+# С Docker
+1. `docker build -t backups:latest .`
+2. `docker run -v <absolute path to src>:/src -v <absolute path to dst>:/dst -v <absolute path to config.yml>:/bin/config.yml -it backups:latest <command, optional>`
 
-> С Docker Compose
-- `docker built -t backups:latest .`
-- `docker compose up`
+# С Docker Compose
+1. `docker built -t backups:latest .`
+2. `docker compose up`
 
 Напоминание: для использования других команд, например `show-config`, надо вставить в `docker-compose.yaml` `command: ["backups", "show-config"]`. Также возможно создать пример конфиг-файла с помощью подкоманды `show-config --example -c <путь до файла>`.
 
-Для docker-compose можно использовать переменные окружения:
- - `BACKUPS_CONFIG_PATH`
- - `BACKUPS_SRC_DIR`
- - `BACKUPS_DST_DIR`
+Для docker-compose можно использовать переменные окружения: `BACKUPS_CONFIG_PATH`, `BACKUPS_SRC_DIR`, `BACKUPS_DST_DIR`.
 
 Поддерживается `yml` и `json`, по умолчанию используется `yml`, определяется по расширению файла. Можно явно указать с помощью флага `-f <yml|yaml|json>`.
 
-> Конфигурация
+# Конфигурация
 ```yaml
 tasks:
   - src: /src
