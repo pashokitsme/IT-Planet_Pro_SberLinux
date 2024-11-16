@@ -1,13 +1,20 @@
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
+use notify::Error;
+use notify_debouncer_full::DebouncedEvent;
 use tracing::*;
 
 use notify_debouncer_full::new_debouncer;
 
-pub struct Watchdog {}
+use crate::config::AppConfig;
+
+pub struct Watchdog {
+  config: AppConfig,
+}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Event {
@@ -20,30 +27,39 @@ impl std::hash::Hash for Event {
   }
 }
 
+struct EventInternal {
+  ev: Result<Vec<DebouncedEvent>, Vec<Error>>,
+  selected_patterns: Arc<Box<[String]>>,
+}
+
 impl Watchdog {
-  pub async fn watch(&self) -> anyhow::Result<tokio::sync::mpsc::UnboundedReceiver<Vec<Event>>> {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+  pub fn new(config: AppConfig) -> Self {
+    Self { config }
+  }
+
+  pub async fn watch_all(&self) -> anyhow::Result<tokio::sync::mpsc::UnboundedReceiver<Vec<Event>>> {
     let (ev_tx, ev_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut watcher = new_debouncer(Duration::from_secs(2), None, move |ev| {
-      if let Err(err) = tx.send(ev) {
-        error!("failed to send event: {}", err);
-      }
-    })?;
+    let mut watchers = Vec::with_capacity(self.config.watch.len());
 
-    let dir = "./watch";
-    let pattern = "**/*";
+    for watch in self.config.watch.iter() {
+      let tx = tx.clone();
+      let selected_patterns = Arc::new(watch.patterns.clone().into_boxed_slice());
+      let mut watcher = new_debouncer(Duration::from_secs(2), None, move |ev| {
+        let selected_patterns = selected_patterns.clone();
+        if let Err(err) = tx.send(EventInternal { ev, selected_patterns }) {
+          error!("failed to send event: {}", err);
+        }
+      })?;
 
-    for path in [PathBuf::from(dir)]
-      .into_iter()
-      .chain(glob::glob(&format!("{}/{}", dir, pattern))?.filter_map(|p| p.ok()).filter(|p| p.is_dir()))
-    {
-      info!("watching: {:?}", path);
-      watcher.watch(path, notify::RecursiveMode::Recursive)?;
+      info!("watching: {:?}", watch.dir);
+      watcher.watch(&watch.dir, notify::RecursiveMode::Recursive)?;
+      watchers.push(watcher);
     }
 
     tokio::spawn(async move {
-      while let Some(ev) = rx.recv().await {
+      while let Some(EventInternal { ev, selected_patterns }) = rx.recv().await {
         let Ok(events) = ev else {
           error!("failed to receive event: {:?}", ev);
           continue;
@@ -55,7 +71,11 @@ impl Watchdog {
 
         for event in events {
           for path in event.paths.iter() {
-            if !path.is_dir() && glob_match::glob_match(pattern, path.to_string_lossy().as_ref()) {
+            if !path.is_dir()
+              && selected_patterns
+                .iter()
+                .any(|pat| glob_match::glob_match(pat, path.to_string_lossy().as_ref()))
+            {
               unique_matched_paths.insert(Event { path: path.to_path_buf() });
             }
           }
@@ -71,7 +91,7 @@ impl Watchdog {
           Err(e) => error!("failed to send event: {}", e),
         }
       }
-      drop(watcher);
+      drop(watchers);
     });
 
     Ok(ev_rx)

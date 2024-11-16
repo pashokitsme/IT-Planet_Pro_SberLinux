@@ -1,19 +1,28 @@
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use tracing::*;
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
+pub type AppConfig = Arc<Config>;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
-  watch: Vec<String>,
+  pub(crate) watch: Vec<WatchPath>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WatchPath {
+  pub(crate) dir: PathBuf,
+  pub(crate) patterns: Vec<String>,
 }
 
 impl Config {
   pub fn example() -> Self {
-    todo!()
+    Self { watch: vec![WatchPath { dir: PathBuf::from("./watch"), patterns: vec!["**/*".to_string()] }] }
   }
 
   pub fn from_file(path: PathBuf, format: Option<String>) -> anyhow::Result<Self> {
@@ -32,18 +41,18 @@ impl Config {
     Ok(config)
   }
 
-  pub fn resolve(config_path: Option<PathBuf>, format: Option<String>) -> anyhow::Result<Self> {
+  pub fn resolve(config_path: Option<&Path>, format: Option<&str>) -> anyhow::Result<AppConfig> {
     const DEFAULT_CONFIG_FILENAMES: &[&str] = &["config.yaml", "config.yml", "config.json"];
 
     let config_path = match config_path {
-      Some(path) if path.exists() => path,
+      Some(path) if path.exists() => path.to_path_buf(),
       _ => match DEFAULT_CONFIG_FILENAMES.iter().find(|f| Path::new(f).exists()) {
         Some(path) => PathBuf::from(path),
         None => return Err(anyhow::anyhow!("no config file specified and no default config file found")),
       },
     };
 
-    Self::from_file(config_path, format)
+    Self::from_file(config_path, format.map(|s| s.to_string())).map(Arc::new)
   }
 }
 
