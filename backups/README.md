@@ -10,7 +10,12 @@
 - `docker built -t backups:latest .`
 - `docker compose up`
 
- Напоминание: для использования других команд, например `show-config`, надо вставить в `docker-compose.yaml` `command: ["backups", "show-config"]`. Также возможно создать пример конфиг-файла с помощью подкоманды `show-config --example -c <путь до файла>`.
+Напоминание: для использования других команд, например `show-config`, надо вставить в `docker-compose.yaml` `command: ["backups", "show-config"]`. Также возможно создать пример конфиг-файла с помощью подкоманды `show-config --example -c <путь до файла>`.
+
+Для docker-compose можно использовать переменные окружения:
+ - `BACKUPS_CONFIG_PATH`
+ - `BACKUPS_SRC_DIR`
+ - `BACKUPS_DST_DIR`
 
 Поддерживается `yml` и `json`, по умолчанию используется `yml`, определяется по расширению файла. Можно явно указать с помощью флага `-f <yml|yaml|json>`.
 
