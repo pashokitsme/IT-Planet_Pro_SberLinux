@@ -46,8 +46,8 @@ pub async fn spawn_backup_task(config: BackupTaskConfig) -> anyhow::Result<()> {
           let span = info_span!(
             "backup",
             r#type = config.on.strategy.to_string(),
-            src = config.source.display().to_string(),
-            dst = config.destination.display().to_string()
+            src = config.src.display().to_string(),
+            dst = config.dst.display().to_string()
           );
 
           let _guard = span.enter();

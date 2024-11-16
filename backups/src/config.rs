@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use color_eyre::owo_colors::OwoColorize;
 use tracing::*;
 
 use serde_derive::Deserialize;
@@ -15,16 +16,27 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct BackupTaskConfig {
-  pub source: PathBuf,
-  pub destination: PathBuf,
+  pub src: PathBuf,
+  pub dst: PathBuf,
   pub on: BackupTriggerConfig,
 }
 
+impl std::fmt::Display for BackupTaskConfig {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    writeln!(f, "\ttask `{}` -> `{}`; on: {}", self.src.display().bold(), self.dst.display().bold(), self.on)
+  }
+}
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct BackupTriggerConfig {
   pub trigger: BackupTrigger,
   pub strategy: BackupStrategyConfig,
+}
+
+impl std::fmt::Display for BackupTriggerConfig {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "strategy: {}; trigger: {}", self.strategy, self.trigger)
+  }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -37,6 +49,21 @@ pub enum BackupTrigger {
     every: Vec<String>,
     at: Option<String>,
   },
+}
+
+impl std::fmt::Display for BackupTrigger {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      BackupTrigger::Schedule { every, at } => {
+        write!(
+          f,
+          "every: {}; at: {}",
+          every.join(", ").bold(),
+          at.as_deref().unwrap_or("<not specified>").bold()
+        )
+      }
+    }
+  }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -55,12 +82,21 @@ impl std::fmt::Display for BackupStrategyConfig {
   }
 }
 
+impl std::fmt::Display for Config {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    for task in &self.tasks {
+      write!(f, "{}", task)?;
+    }
+    Ok(())
+  }
+}
+
 impl Config {
   pub fn example() -> Self {
     Config {
       tasks: vec![BackupTaskConfig {
-        source: PathBuf::from("/path/to/source2"),
-        destination: PathBuf::from("/path/to/destination2"),
+        src: PathBuf::from("/src"),
+        dst: PathBuf::from("/dst"),
         on: BackupTriggerConfig {
           trigger: BackupTrigger::Schedule { every: vec!["10 seconds".to_string()], at: None },
           strategy: BackupStrategyConfig::Incremental,
@@ -77,7 +113,7 @@ impl Config {
 
     let config: Self = match format {
       ConfigFormat::Json => serde_json::from_str(&content)?,
-      ConfigFormat::Yaml => serde_yaml::from_str(&content)?,
+      ConfigFormat::Yaml => serde_yml::from_str(&content)?,
     };
 
     debug!("config: {:#?}", config);

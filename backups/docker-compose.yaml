@@ -1,0 +1,7 @@
+services:
+  app:
+    image: backups:latest
+    volumes:
+      - ${BACKUPS_CONFIG_PATH:-./config.yml}:/bin/config.yml
+      - ${BACKUPS_SRC_DIR:-./src}:/src
+      - ${BACKUPS_DST_DIR:-./dst}:/dst

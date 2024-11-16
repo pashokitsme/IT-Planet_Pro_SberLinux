@@ -43,7 +43,7 @@ fn write_example_config(path: Option<PathBuf>, format: Option<String>) -> anyhow
 
   let data = match format {
     config::ConfigFormat::Json => serde_json::to_string_pretty(&config)?,
-    config::ConfigFormat::Yaml => serde_yaml::to_string(&config)?,
+    config::ConfigFormat::Yaml => serde_yml::to_string(&config)?,
   };
 
   if let Some(path) = path {
@@ -59,6 +59,7 @@ fn write_example_config(path: Option<PathBuf>, format: Option<String>) -> anyhow
 
 async fn start(config_path: Option<PathBuf>, format: Option<String>) -> anyhow::Result<()> {
   let config = config::Config::resolve(config_path, format)?;
+  info!("running with config:\n{}", config);
   scheduler::run_backup_tasks(config).await?;
   loop {
     thread::park();

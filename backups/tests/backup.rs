@@ -14,8 +14,8 @@ fn prepare_test_dir() -> (PathBuf, PathBuf, TempDir, BackupTaskConfig) {
   std::fs::create_dir_all(&dst).unwrap();
 
   let config = BackupTaskConfig {
-    source: src.clone(),
-    destination: dst.clone(),
+    src: src.clone(),
+    dst: dst.clone(),
     on: BackupTriggerConfig {
       trigger: BackupTrigger::Schedule {
         every: vec!["1 second".to_string()],

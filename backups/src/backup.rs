@@ -14,37 +14,35 @@ mod incremental {
   use tracing::*;
 
   pub fn make_incremental_backup(config: &BackupTaskConfig) -> anyhow::Result<()> {
-    std::fs::create_dir_all(&config.destination)?;
-    let span = info_span!(
-      "rm",
-      src = config.source.display().to_string(),
-      dst = config.destination.display().to_string()
-    );
+    if !config.src.exists() {
+      anyhow::bail!("src directory does not exist: {}", config.src.display());
+    }
+
+    std::fs::create_dir_all(&config.dst)?;
+    let span =
+      info_span!("rm", src = config.src.display().to_string(), dst = config.dst.display().to_string());
     let _guard = span.enter();
-    remove_unwanted_files_from_dst(&config.source, &config.destination)?;
+    remove_unwanted_files_from_dst(&config.src, &config.dst)?;
     drop(_guard);
-    let span = info_span!(
-      "cp",
-      src = config.source.display().to_string(),
-      dst = config.destination.display().to_string()
-    );
+    let span =
+      info_span!("cp", src = config.src.display().to_string(), dst = config.dst.display().to_string());
     let _guard = span.enter();
-    copy_incremental_all(&config.source, &config.destination)?;
+    copy_incremental_all(&config.src, &config.dst)?;
     drop(_guard);
     Ok(())
   }
 
-  pub fn copy_incremental_all(source: &Path, dst: &Path) -> anyhow::Result<()> {
+  pub fn copy_incremental_all(src: &Path, dst: &Path) -> anyhow::Result<()> {
     let mut copied_count = 0;
 
-    if source.is_dir() {
+    if src.is_dir() {
       std::fs::create_dir_all(dst)?;
 
-      for entry in std::fs::read_dir(source)? {
+      for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let path = entry.path();
         let dst_path = dst.join(path.file_name().unwrap());
-        let src_path = source.join(path.file_name().unwrap());
+        let src_path = src.join(path.file_name().unwrap());
 
         if path.is_dir() {
           copy_incremental_all(&path, &dst_path)?;
@@ -54,9 +52,9 @@ mod incremental {
           copied_count += 1;
         }
       }
-    } else if !dst.exists() || dst.metadata()?.modified()? < source.metadata()?.modified()? {
-      info!("copying {} to {}", source.display(), dst.display());
-      std::fs::copy(source, dst)?;
+    } else if !dst.exists() || dst.metadata()?.modified()? < src.metadata()?.modified()? {
+      info!("copying {} to {}", src.display(), dst.display());
+      std::fs::copy(src, dst)?;
       copied_count += 1;
     }
 
@@ -92,7 +90,7 @@ mod incremental {
         }
       }
     } else if dst.exists() && !src.exists() {
-      std::fs::remove_file(dst)?;
+      std::fs::remove_dir_all(dst)?;
       removed_count += 1;
     }
 
@@ -113,12 +111,12 @@ mod differential {
   use tracing::*;
 
   pub fn make_differential_backup(config: &BackupTaskConfig) -> anyhow::Result<()> {
-    std::fs::create_dir_all(&config.destination)?;
+    std::fs::create_dir_all(&config.dst)?;
     let temp_dir = tempfile::tempdir_in(
       config
-        .destination
+        .dst
         .parent()
-        .ok_or(std::io::Error::new(std::io::ErrorKind::InvalidInput, "destination has no parent"))?,
+        .ok_or(std::io::Error::new(std::io::ErrorKind::InvalidInput, "dst has no parent"))?,
     )?;
     let temp_bak_dir = temp_dir.path();
     std::fs::create_dir_all(temp_bak_dir)?;
@@ -126,18 +124,15 @@ mod differential {
     let span = info_span!("tmp", path = temp_bak_dir.display().to_string());
     let _guard = span.enter();
     info!("temp dir path: {}", temp_bak_dir.display());
-    copy_all(&config.source, temp_bak_dir)?;
+    copy_all(&config.src, temp_bak_dir)?;
     drop(_guard);
-    let span = info_span!(
-      "mv",
-      src = temp_bak_dir.display().to_string(),
-      dst = config.destination.display().to_string()
-    );
+    let span =
+      info_span!("mv", src = temp_bak_dir.display().to_string(), dst = config.dst.display().to_string());
     let _guard = span.enter();
     info!("remove old backup");
-    std::fs::remove_dir_all(&config.destination)?;
-    info!("moving temp dir to destination");
-    std::fs::rename(temp_bak_dir, &config.destination)?;
+    std::fs::remove_dir_all(&config.dst)?;
+    info!("moving temp dir to dst");
+    std::fs::rename(temp_bak_dir, &config.dst)?;
     drop(_guard);
 
     Ok(())
