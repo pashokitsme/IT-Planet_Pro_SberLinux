@@ -1,6 +1,7 @@
 mod backup;
 mod config;
 
+use std::path::Path;
 use std::path::PathBuf;
 
 use tracing::*;
@@ -15,26 +16,26 @@ use config::ConfigFormat;
 struct Cli {
   #[command(subcommand)]
   command: Commands,
+
+  /// Path to config
+  #[arg(short, long)]
+  config: Option<PathBuf>,
+
+  /// Force format of example config
+  #[arg(short, long, value_parser = ["json", "yaml", "yml"])]
+  format: Option<String>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-  /// Show the current config or create an example
-  ShowConfig,
-  /// Write an example config to stdout or to the path if specified
-  ExampleConfig {
-    /// Path to write the example config
-    #[arg(short, long)]
-    path: Option<PathBuf>,
-    /// Force format of example config
-    #[arg(short, long, value_parser = ["json", "yaml", "yml"])]
-    format: Option<String>,
+  /// Show the current config or create an example one
+  ShowConfig {
+    /// Create an example config; Provide a path to write it to
+    #[arg(long)]
+    example: bool,
   },
   /// Start the program
-  Start {
-    #[arg(short, long)]
-    config: Option<PathBuf>,
-  },
+  Start,
 }
 
 fn write_example_config(path: Option<PathBuf>, format: Option<String>) -> anyhow::Result<()> {
@@ -60,25 +61,36 @@ fn write_example_config(path: Option<PathBuf>, format: Option<String>) -> anyhow
   Ok(())
 }
 
-fn setup_tracing() {
-  tracing_subscriber::fmt::fmt().without_time().init();
+async fn start(config_path: Option<PathBuf>, format: Option<String>) -> anyhow::Result<()> {
+  let config = config::Config::resolve(config_path, format)?;
+
+  Ok(())
 }
 
 #[tokio::main]
 async fn main() {
+  color_eyre::install().expect("failed to install color_eyre");
   setup_tracing();
 
   let cli = Cli::parse();
 
+  let Cli { config, format, .. } = cli;
+
   match cli.command {
-    Commands::ShowConfig => {
-      println!("Config command");
+    Commands::ShowConfig { example } => {
+      if example {
+        write_example_config(config, format).expect("Failed to create example config");
+      } else {
+        let config = config::Config::resolve(config, format).expect("Failed to resolve config");
+        println!("{:#?}", config);
+      }
     }
-    Commands::ExampleConfig { path, format } => {
-      write_example_config(path, format).expect("Failed to write example config");
-    }
-    Commands::Start { config } => {
-      println!("Start command");
+    Commands::Start => {
+      start(config, format).await.expect("Failed to run application");
     }
   }
+}
+
+fn setup_tracing() {
+  tracing_subscriber::fmt::fmt().without_time().init();
 }
