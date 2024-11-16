@@ -1,15 +1,13 @@
-mod backup;
-mod config;
-
-use std::path::Path;
 use std::path::PathBuf;
+use std::thread;
 
 use tracing::*;
 
 use clap::*;
 use clap_derive::*;
 
-use config::ConfigFormat;
+use backups::config;
+use backups::scheduler;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -18,11 +16,11 @@ struct Cli {
   command: Commands,
 
   /// Path to config
-  #[arg(short, long)]
+  #[arg(short, long, global = true)]
   config: Option<PathBuf>,
 
   /// Force format of example config
-  #[arg(short, long, value_parser = ["json", "yaml", "yml"])]
+  #[arg(short, long, value_parser = ["json", "yaml", "yml"], global = true)]
   format: Option<String>,
 }
 
@@ -40,14 +38,12 @@ enum Commands {
 
 fn write_example_config(path: Option<PathBuf>, format: Option<String>) -> anyhow::Result<()> {
   let config = config::Config::example();
-
-  let format = ConfigFormat::from_ext_or_format(path.as_ref(), format);
-
+  let format = config::ConfigFormat::from_ext_or_format(path.as_ref(), format);
   debug!("resolved format: {}", format);
 
   let data = match format {
-    ConfigFormat::Json => serde_json::to_string_pretty(&config)?,
-    ConfigFormat::Yaml => serde_yaml::to_string(&config)?,
+    config::ConfigFormat::Json => serde_json::to_string_pretty(&config)?,
+    config::ConfigFormat::Yaml => serde_yaml::to_string(&config)?,
   };
 
   if let Some(path) = path {
@@ -63,15 +59,12 @@ fn write_example_config(path: Option<PathBuf>, format: Option<String>) -> anyhow
 
 async fn start(config_path: Option<PathBuf>, format: Option<String>) -> anyhow::Result<()> {
   let config = config::Config::resolve(config_path, format)?;
-
+  scheduler::run_backup_tasks(config).await?;
   Ok(())
 }
 
 #[tokio::main]
-async fn main() {
-  color_eyre::install().expect("failed to install color_eyre");
-  setup_tracing();
-
+async fn real_main() -> anyhow::Result<()> {
   let cli = Cli::parse();
 
   let Cli { config, format, .. } = cli;
@@ -79,18 +72,35 @@ async fn main() {
   match cli.command {
     Commands::ShowConfig { example } => {
       if example {
-        write_example_config(config, format).expect("Failed to create example config");
+        write_example_config(config, format)?;
       } else {
-        let config = config::Config::resolve(config, format).expect("Failed to resolve config");
+        let config = config::Config::resolve(config, format)?;
         println!("{:#?}", config);
       }
     }
     Commands::Start => {
-      start(config, format).await.expect("Failed to run application");
+      start(config, format).await?;
+    }
+  }
+
+  loop {
+    thread::park();
+  }
+}
+
+fn main() {
+  color_eyre::install().expect("failed to install color_eyre");
+  setup_tracing();
+
+  match real_main() {
+    Ok(_) => (),
+    Err(e) => {
+      error!("failed to run program: {}", e);
+      std::process::exit(1);
     }
   }
 }
 
 fn setup_tracing() {
-  tracing_subscriber::fmt::fmt().without_time().init();
+  tracing_subscriber::fmt::fmt().pretty().init();
 }

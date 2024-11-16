@@ -9,61 +9,77 @@ use serde_derive::Serialize;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
-  pub(crate) journal_dir: PathBuf,
-  pub(crate) backups: Vec<BackupConfig>,
+  pub journal_dir: PathBuf,
+  pub tasks: Vec<BackupTaskConfig>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
-pub struct BackupConfig {
-  pub(crate) source: PathBuf,
-  pub(crate) destination: PathBuf,
-  pub(crate) on: BackupTriggerConfig,
+pub struct BackupTaskConfig {
+  pub source: PathBuf,
+  pub destination: PathBuf,
+  pub on: BackupTriggerConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct BackupTriggerConfig {
-  pub(crate) trigger: BackupTrigger,
-  pub(crate) strategy: BackupStrategy,
+  pub trigger: BackupTrigger,
+  pub strategy: BackupStrategyConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
+#[serde(tag = "type")]
 pub enum BackupTrigger {
   Change,
-  Schedule,
+  Schedule {
+    #[serde(default = "schedule_default_every")]
+    every: Vec<String>,
+    at: Option<String>,
+  },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
-pub enum BackupStrategy {
+pub enum BackupStrategyConfig {
   Incremental,
   Differential,
-  Full,
 }
 
 impl Config {
   pub fn example() -> Self {
     Config {
       journal_dir: PathBuf::from("/path/to/journal"),
-      backups: vec![
-        BackupConfig {
+      tasks: vec![
+        BackupTaskConfig {
           source: PathBuf::from("/path/to/source"),
           destination: PathBuf::from("/path/to/destination"),
-          on: BackupTriggerConfig { trigger: BackupTrigger::Change, strategy: BackupStrategy::Incremental },
+          on: BackupTriggerConfig {
+            trigger: BackupTrigger::Change,
+            strategy: BackupStrategyConfig::Incremental,
+          },
         },
-        BackupConfig {
+        BackupTaskConfig {
           source: PathBuf::from("/path/to/source2"),
           destination: PathBuf::from("/path/to/destination2"),
-          on: BackupTriggerConfig { trigger: BackupTrigger::Schedule, strategy: BackupStrategy::Full },
+          on: BackupTriggerConfig {
+            trigger: BackupTrigger::Schedule {
+              every: vec!["1 day".to_string()],
+              at: Some("00:00:00".to_string()),
+            },
+            strategy: BackupStrategyConfig::Incremental,
+          },
         },
-        BackupConfig {
+        BackupTaskConfig {
           source: PathBuf::from("/path/to/source3"),
           destination: PathBuf::from("/path/to/destination3"),
           on: BackupTriggerConfig {
-            trigger: BackupTrigger::Schedule,
-            strategy: BackupStrategy::Differential,
+            trigger: BackupTrigger::Schedule {
+              every: vec!["1 day".to_string()],
+              at: Some("00:00:00".to_string()),
+            },
+            strategy: BackupStrategyConfig::Differential,
           },
         },
       ],
@@ -97,7 +113,7 @@ impl Config {
       },
     };
 
-    Ok(Self::from_file(config_path, format)?)
+    Self::from_file(config_path, format)
   }
 }
 
@@ -141,4 +157,8 @@ impl ConfigFormat {
   pub fn from_ext_or_format<P: AsRef<Path>>(s: Option<P>, or: Option<String>) -> Self {
     s.and_then(Self::from_ext).unwrap_or(Self::from(or.unwrap_or_default()))
   }
+}
+
+fn schedule_default_every() -> Vec<String> {
+  vec!["1 day".to_string()]
 }
