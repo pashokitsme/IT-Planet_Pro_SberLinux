@@ -1,0 +1,17 @@
+MOUNT_POINT := "$PWD/mnt"
+
+run: 
+  cargo run --bin vfs {MOUNT_POINT}
+
+test: clean
+  for file in `ls tests | grep -v "out"`; do \
+    printf "\nRunning test file %s\n" $file; \
+    clang tests/$file -o tests/$(basename $file).out; \
+    tests/$(basename $file).out; \
+  done
+
+unmount:
+  diskutil unmount force {{MOUNT_POINT}}
+
+clean:
+  rm -rf tests/*.*.out
