@@ -60,7 +60,9 @@ fn write_example_config(path: Option<PathBuf>, format: Option<String>) -> anyhow
 async fn start(config_path: Option<PathBuf>, format: Option<String>) -> anyhow::Result<()> {
   let config = config::Config::resolve(config_path, format)?;
   scheduler::run_backup_tasks(config).await?;
-  Ok(())
+  loop {
+    thread::park();
+  }
 }
 
 #[tokio::main]
@@ -83,9 +85,7 @@ async fn real_main() -> anyhow::Result<()> {
     }
   }
 
-  loop {
-    thread::park();
-  }
+  Ok(())
 }
 
 fn main() {
@@ -102,5 +102,5 @@ fn main() {
 }
 
 fn setup_tracing() {
-  tracing_subscriber::fmt::fmt().pretty().init();
+  tracing_subscriber::fmt::fmt().init();
 }

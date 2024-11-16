@@ -9,7 +9,6 @@ use serde_derive::Serialize;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
-  pub journal_dir: PathBuf,
   pub tasks: Vec<BackupTaskConfig>,
 }
 
@@ -32,7 +31,7 @@ pub struct BackupTriggerConfig {
 #[serde(rename_all = "kebab-case")]
 #[serde(tag = "type")]
 pub enum BackupTrigger {
-  Change,
+  // Change,
   Schedule {
     #[serde(default = "schedule_default_every")]
     every: Vec<String>,
@@ -47,42 +46,26 @@ pub enum BackupStrategyConfig {
   Differential,
 }
 
+impl std::fmt::Display for BackupStrategyConfig {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      BackupStrategyConfig::Incremental => write!(f, "inc"),
+      BackupStrategyConfig::Differential => write!(f, "diff"),
+    }
+  }
+}
+
 impl Config {
   pub fn example() -> Self {
     Config {
-      journal_dir: PathBuf::from("/path/to/journal"),
-      tasks: vec![
-        BackupTaskConfig {
-          source: PathBuf::from("/path/to/source"),
-          destination: PathBuf::from("/path/to/destination"),
-          on: BackupTriggerConfig {
-            trigger: BackupTrigger::Change,
-            strategy: BackupStrategyConfig::Incremental,
-          },
+      tasks: vec![BackupTaskConfig {
+        source: PathBuf::from("/path/to/source2"),
+        destination: PathBuf::from("/path/to/destination2"),
+        on: BackupTriggerConfig {
+          trigger: BackupTrigger::Schedule { every: vec!["10 seconds".to_string()], at: None },
+          strategy: BackupStrategyConfig::Incremental,
         },
-        BackupTaskConfig {
-          source: PathBuf::from("/path/to/source2"),
-          destination: PathBuf::from("/path/to/destination2"),
-          on: BackupTriggerConfig {
-            trigger: BackupTrigger::Schedule {
-              every: vec!["1 day".to_string()],
-              at: Some("00:00:00".to_string()),
-            },
-            strategy: BackupStrategyConfig::Incremental,
-          },
-        },
-        BackupTaskConfig {
-          source: PathBuf::from("/path/to/source3"),
-          destination: PathBuf::from("/path/to/destination3"),
-          on: BackupTriggerConfig {
-            trigger: BackupTrigger::Schedule {
-              every: vec!["1 day".to_string()],
-              at: Some("00:00:00".to_string()),
-            },
-            strategy: BackupStrategyConfig::Differential,
-          },
-        },
-      ],
+      }],
     }
   }
 

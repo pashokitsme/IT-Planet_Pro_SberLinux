@@ -20,7 +20,6 @@ pub async fn run_backup_tasks(config: Config) -> anyhow::Result<()> {
 
 pub async fn spawn_backup_task(config: BackupTaskConfig) -> anyhow::Result<()> {
   match config.on.trigger {
-    BackupTrigger::Change => unimplemented!(),
     BackupTrigger::Schedule { ref every, ref at } => {
       let mut intervals = parse_schedule(every)?.into_iter();
 
@@ -46,6 +45,7 @@ pub async fn spawn_backup_task(config: BackupTaskConfig) -> anyhow::Result<()> {
         async move {
           let span = info_span!(
             "backup",
+            r#type = config.on.strategy.to_string(),
             src = config.source.display().to_string(),
             dst = config.destination.display().to_string()
           );
