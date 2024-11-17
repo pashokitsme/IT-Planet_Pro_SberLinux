@@ -3,8 +3,6 @@ FROM rust:slim-bookworm AS builder
 WORKDIR /src
 COPY . .
 
-ENV USE_DOCKER=1
-
 RUN cargo update
 
 RUN cargo build --release

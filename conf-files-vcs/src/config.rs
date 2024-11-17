@@ -88,7 +88,11 @@ impl From<Option<String>> for ConfigFormat {
 
 impl From<String> for ConfigFormat {
   fn from(s: String) -> Self {
-    ConfigFormat::from_ext(&s).unwrap_or_default()
+    match s.as_str() {
+      "json" => ConfigFormat::Json,
+      "yaml" | "yml" => ConfigFormat::Yaml,
+      _ => ConfigFormat::default(),
+    }
   }
 }
 
@@ -102,6 +106,10 @@ impl ConfigFormat {
   }
 
   pub fn from_ext_or_format<P: AsRef<Path>>(s: Option<P>, or: Option<String>) -> Self {
+    if let Some(or) = or {
+      return Self::from(or);
+    }
+
     s.and_then(Self::from_ext).unwrap_or(Self::from(or.unwrap_or_default()))
   }
 }
