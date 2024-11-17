@@ -11,6 +11,7 @@ pub type AppConfig = Arc<Config>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
+  pub(crate) repo: PathBuf,
   pub(crate) watch: Vec<WatchPath>,
 }
 
@@ -21,8 +22,15 @@ pub struct WatchPath {
 }
 
 impl Config {
+  pub fn repo(&self) -> &Path {
+    &self.repo
+  }
+
   pub fn example() -> Self {
-    Self { watch: vec![WatchPath { dir: PathBuf::from("./watch"), patterns: vec!["**/*".to_string()] }] }
+    Self {
+      repo: PathBuf::from("./configs.git"),
+      watch: vec![WatchPath { dir: PathBuf::from("./watch"), patterns: vec!["**/*".to_string()] }],
+    }
   }
 
   pub fn from_file(path: PathBuf, format: Option<String>) -> anyhow::Result<Self> {

@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::hash::Hasher;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,20 +15,16 @@ pub struct Watchdog {
   config: AppConfig,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Hash, PartialEq, Eq, Clone, Debug)]
 pub struct Event {
-  path: PathBuf,
-}
-
-impl std::hash::Hash for Event {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    self.path.hash(state);
-  }
+  pub path: PathBuf,
+  pub dir: Arc<PathBuf>,
 }
 
 struct EventInternal {
   ev: Result<Vec<DebouncedEvent>, Vec<Error>>,
   selected_patterns: Arc<Box<[String]>>,
+  dir: Arc<PathBuf>,
 }
 
 impl Watchdog {
@@ -46,9 +41,11 @@ impl Watchdog {
     for watch in self.config.watch.iter() {
       let tx = tx.clone();
       let selected_patterns = Arc::new(watch.patterns.clone().into_boxed_slice());
-      let mut watcher = new_debouncer(Duration::from_secs(2), None, move |ev| {
+      let dir = Arc::new(dunce::canonicalize(&watch.dir).unwrap_or(watch.dir.to_path_buf()));
+      let mut watcher = new_debouncer(Duration::from_secs(5), None, move |ev| {
         let selected_patterns = selected_patterns.clone();
-        if let Err(err) = tx.send(EventInternal { ev, selected_patterns }) {
+        let dir = dir.clone();
+        if let Err(err) = tx.send(EventInternal { ev, selected_patterns, dir }) {
           error!("failed to send event: {}", err);
         }
       })?;
@@ -59,7 +56,7 @@ impl Watchdog {
     }
 
     tokio::spawn(async move {
-      while let Some(EventInternal { ev, selected_patterns }) = rx.recv().await {
+      while let Some(EventInternal { ev, selected_patterns, dir }) = rx.recv().await {
         let Ok(events) = ev else {
           error!("failed to receive event: {:?}", ev);
           continue;
@@ -71,12 +68,21 @@ impl Watchdog {
 
         for event in events {
           for path in event.paths.iter() {
-            if !path.is_dir()
+            let canonicalized_path = dunce::canonicalize(path).unwrap_or(path.to_path_buf());
+            let final_path = match canonicalized_path.strip_prefix(dir.as_ref()) {
+              Ok(path) => path,
+              Err(e) => {
+                error!("failed to strip prefix of path: {}", e);
+                continue;
+              }
+            };
+
+            if !canonicalized_path.is_dir()
               && selected_patterns
                 .iter()
-                .any(|pat| glob_match::glob_match(pat, path.to_string_lossy().as_ref()))
+                .any(|pat| glob_match::glob_match(pat, final_path.to_string_lossy().as_ref()))
             {
-              unique_matched_paths.insert(Event { path: path.to_path_buf() });
+              unique_matched_paths.insert(Event { path: final_path.to_path_buf(), dir: dir.clone() });
             }
           }
         }

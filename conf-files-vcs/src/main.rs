@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
+use anyhow::Context;
 use conf_files_vcs::config::*;
+use conf_files_vcs::repo::Repo;
 use conf_files_vcs::watch::Watchdog;
 
 use tracing::*;
@@ -72,11 +74,18 @@ impl Commands {
   }
 
   async fn watch(&self, cli: &Cli) -> anyhow::Result<()> {
+    const REPO_INIT_ERROR: &str = "failed to open or create repo; perhaps you need to clone again or delete it by yourself and let the program to reinit it?";
+
     let config = Config::resolve(cli.config.as_deref(), cli.format.as_deref())?;
+    let repo = Repo::open_or_create(config.repo()).context(REPO_INIT_ERROR)?;
     let watcher = Watchdog::new(config);
     let mut rx = watcher.watch_all().await?;
     while let Some(events) = rx.recv().await {
       info!("event: {:?}", events);
+      match repo.autosave(&events) {
+        Ok(_) => info!("autosaved"),
+        Err(e) => error!("failed to autosave: {}", e),
+      }
     }
     Ok(())
   }
@@ -93,7 +102,10 @@ fn main() {
   match real_main() {
     Ok(_) => (),
     Err(e) => {
-      error!("Error: {}", e);
+      if let Some(source) = e.source() {
+        error!("{}", source);
+      }
+      error!("{}", e);
       std::process::exit(1);
     }
   }
