@@ -12,14 +12,6 @@ use crate::watch::Event;
 
 pub struct Repo(git2::Repository);
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Status {
-  Created,
-  Modified,
-  Deleted,
-  Unmodified,
-}
-
 struct FmtDelta<'a>(&'a Diff<'a>, &'a DiffDelta<'a>);
 struct FmtDeltaStatus<'a>(&'a Delta);
 
