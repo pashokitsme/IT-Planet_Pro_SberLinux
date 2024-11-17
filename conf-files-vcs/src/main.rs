@@ -48,13 +48,13 @@ enum Commands {
   /// Show the commit logs
   Log {
     /// Path to the file to log
-    #[arg(short, long)]
+    #[arg()]
     path: Option<PathBuf>,
   },
   /// Reset file to previous state
   Reset {
     /// Path to the file to reset
-    #[arg(short, long)]
+    #[arg()]
     path: PathBuf,
     /// Commit id to reset file to
     #[arg(long)]
@@ -75,20 +75,20 @@ impl Commands {
   }
 
   fn diff(&self, cli: &Cli, path: &Path, id: &str) -> anyhow::Result<()> {
-    let (config, repo) = self.open_repo(cli)?;
+    let (_, repo) = self.open_repo(cli)?;
     let oid = git2::Oid::from_str(id).context("provided an invalid commit id")?;
     repo.show_diff(path, oid)
   }
 
   fn log(&self, cli: &Cli, path: Option<&Path>) -> anyhow::Result<()> {
-    let (config, repo) = self.open_repo(cli)?;
-    unimplemented!("please use `git log`")
+    let (_, repo) = self.open_repo(cli)?;
+    repo.log(path)
   }
 
   fn reset(&self, cli: &Cli, path: &Path, id: &str) -> anyhow::Result<()> {
-    let (config, repo) = self.open_repo(cli)?;
+    let (_, repo) = self.open_repo(cli)?;
     let oid = git2::Oid::from_str(id).context("provided an invalid commit id")?;
-    unimplemented!("please use `git reset`")
+    repo.reset(path, oid)
   }
 
   fn show_config(&self, cli: &Cli) -> anyhow::Result<()> {

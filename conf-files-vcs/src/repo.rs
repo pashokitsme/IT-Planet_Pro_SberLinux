@@ -1,5 +1,6 @@
 use core::str;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 
 use anyhow::Context;
@@ -155,6 +156,56 @@ impl Repo {
     Ok(())
   }
 
+  pub fn log(&self, path: Option<&Path>) -> anyhow::Result<()> {
+    use owo_colors::OwoColorize;
+
+    let mut revwalk = self.0.revwalk()?;
+    revwalk.push_head()?;
+    revwalk.set_sorting(Sort::TIME)?;
+
+    info!("showing commit log");
+
+    let path =
+      path.map(dunce::canonicalize).transpose()?.and_then(|p| p.strip_prefix("/").ok().map(PathBuf::from));
+
+    while let Some(Ok(id)) = revwalk.next() {
+      let commit = self.0.find_commit(id)?;
+
+      if let Some(path) = path.as_ref() {
+        if commit.tree()?.get_path(path).is_err() {
+          continue;
+        }
+      }
+
+      println!("id: {}, author: {}", id.bright_white().bold(), commit.author().bright_white().bold());
+      println!("{}", commit.message().unwrap_or("<unknown>"));
+      println!();
+    }
+
+    Ok(())
+  }
+
+  pub fn reset(&self, path: &Path, id: Oid) -> anyhow::Result<()> {
+    let commit = self.0.find_commit(id)?;
+    let tree = commit.tree()?;
+
+    let full_path = dunce::canonicalize(path).unwrap_or(path.to_path_buf());
+    let repo_path = full_path.strip_prefix("/").map(PathBuf::from).unwrap_or(full_path.clone());
+    match tree.get_path(&repo_path) {
+      Ok(entry) => {
+        info!("reset {} to state at commit {}", repo_path.display(), id);
+        let blob = self.0.find_blob(entry.id())?;
+        std::fs::write(full_path, blob.content())?;
+      }
+      Err(_) => {
+        info!("path {} not found in commit {}; so deleting the file", repo_path.display(), id);
+        std::fs::remove_file(full_path)?;
+      }
+    };
+
+    Ok(())
+  }
+
   fn add_from_path(&self, index: &mut Index, path: &Path) -> anyhow::Result<()> {
     use std::os::unix::fs::MetadataExt;
 
@@ -199,7 +250,7 @@ impl Repo {
 
   fn create_commit_message(&self, paths: &[&Path]) -> String {
     let mut message = format!("Autosaving: {} files\n\nSaved files:\n", paths.len());
-    paths.iter().for_each(|path| message.push_str(&format!("\t- {}\n", path.display())));
+    paths.iter().for_each(|path| message.push_str(&format!("\t- /{}\n", path.display())));
     message
   }
 
