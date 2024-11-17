@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -35,6 +36,30 @@ enum Commands {
   },
   /// Watch for changes
   Watch,
+  /// See the difference between files
+  Diff {
+    /// Path to the file to diff assuming the file was already autosaved
+    #[arg()]
+    path: PathBuf,
+    /// Commit id to diff file with
+    #[arg(long)]
+    id: String,
+  },
+  /// Show the commit logs
+  Log {
+    /// Path to the file to log
+    #[arg(short, long)]
+    path: Option<PathBuf>,
+  },
+  /// Reset file to previous state
+  Reset {
+    /// Path to the file to reset
+    #[arg(short, long)]
+    path: PathBuf,
+    /// Commit id to reset file to
+    #[arg(long)]
+    id: String,
+  },
 }
 
 impl Commands {
@@ -43,7 +68,27 @@ impl Commands {
       Self::ShowConfig { example, .. } if *example => self.write_example_config(cli),
       Self::ShowConfig { .. } => self.show_config(cli),
       Self::Watch => self.watch(cli).await,
+      Self::Diff { path, id } => self.diff(cli, path, id),
+      Self::Log { path } => self.log(cli, path.as_deref()),
+      Self::Reset { path, id } => self.reset(cli, path, id),
     }
+  }
+
+  fn diff(&self, cli: &Cli, path: &Path, id: &str) -> anyhow::Result<()> {
+    let (config, repo) = self.open_repo(cli)?;
+    let oid = git2::Oid::from_str(id).context("provided an invalid commit id")?;
+    repo.show_diff(path, oid)
+  }
+
+  fn log(&self, cli: &Cli, path: Option<&Path>) -> anyhow::Result<()> {
+    let (config, repo) = self.open_repo(cli)?;
+    unimplemented!("please use `git log`")
+  }
+
+  fn reset(&self, cli: &Cli, path: &Path, id: &str) -> anyhow::Result<()> {
+    let (config, repo) = self.open_repo(cli)?;
+    let oid = git2::Oid::from_str(id).context("provided an invalid commit id")?;
+    unimplemented!("please use `git reset`")
   }
 
   fn show_config(&self, cli: &Cli) -> anyhow::Result<()> {
@@ -74,10 +119,7 @@ impl Commands {
   }
 
   async fn watch(&self, cli: &Cli) -> anyhow::Result<()> {
-    const REPO_INIT_ERROR: &str = "failed to open or create repo; perhaps you need to clone again or delete it by yourself and let the program to reinit it?";
-
-    let config = Config::resolve(cli.config.as_deref(), cli.format.as_deref())?;
-    let repo = Repo::open_or_create(config.repo()).context(REPO_INIT_ERROR)?;
+    let (config, repo) = self.open_repo(cli)?;
     let watcher = Watchdog::new(config);
     let mut rx = watcher.watch_all().await?;
     while let Some(events) = rx.recv().await {
@@ -88,6 +130,13 @@ impl Commands {
       }
     }
     Ok(())
+  }
+
+  fn open_repo(&self, cli: &Cli) -> anyhow::Result<(AppConfig, Repo)> {
+    const REPO_INIT_ERROR: &str = "failed to open or create repo; perhaps you need to clone again or delete it by yourself and let the program to reinit it?";
+    let config = Config::resolve(cli.config.as_deref(), cli.format.as_deref())?;
+    let repo = Repo::open_or_create(config.repo()).context(REPO_INIT_ERROR)?;
+    Ok((config, repo))
   }
 }
 

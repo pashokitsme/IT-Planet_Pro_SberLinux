@@ -24,3 +24,5 @@ serde_yml = "0.0.12"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 dunce = "1.0.5"
+whoami = { version = "1.5.2", default-features = false }
+owo-colors = "4.1.0"
